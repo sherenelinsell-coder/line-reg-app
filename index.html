@@ -3,116 +3,149 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>活動報名小程式</title>
+    <title>活動報名系統</title>
     <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
     <style>
-        /* 簡單的視覺美化 */
-        body { font-family: "Microsoft JhengHei", sans-serif; background-color: #f4f7f6; padding: 20px; }
-        .card { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-        h2 { color: #2c3e50; text-align: center; }
+        body { font-family: sans-serif; background-color: #f4f7f6; padding: 20px; color: #333; }
+        .card { background: white; padding: 20px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); max-width: 400px; margin: auto; }
+        h2 { color: #00b900; text-align: center; }
         .field { margin-bottom: 15px; }
         label { display: block; margin-bottom: 5px; font-weight: bold; }
-        input, select, textarea { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px; box-sizing: border-box; }
-        button { width: 100%; padding: 12px; background-color: #00b900; color: white; border: none; border-radius: 5px; font-size: 16px; cursor: pointer; }
+        input, select, textarea { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; font-size: 16px; }
+        #eventDetail { background: #eef9ee; padding: 10px; border-radius: 8px; font-size: 14px; margin-top: 5px; display: none; white-space: pre-wrap; }
+        button { width: 100%; padding: 15px; background-color: #00b900; color: white; border: none; border-radius: 8px; font-size: 18px; cursor: pointer; }
         button:disabled { background-color: #ccc; }
+        #successUI { display: none; text-align: center; }
+        .success-icon { font-size: 50px; color: #00b900; }
     </style>
 </head>
 <body>
 
 <div class="card">
-    <h2>活動報名</h2>
-    <form id="regForm">
-        <div class="field">
-            <label>選擇活動：</label>
-            <select id="eventList" required>
-                <option value="">載入活動中...</option>
-            </select>
-        </div>
-        <div class="field">
-            <label>您的姓名：</label>
-            <input type="text" id="userName" readonly placeholder="登入 LINE 後自動帶入">
-        </div>
-        <div class="field">
-            <label>聯絡電話：</label>
-            <input type="tel" id="userPhone" required placeholder="請輸入手機號碼">
-        </div>
-        <div class="field">
-            <label>備註：</label>
-            <textarea id="userNote" rows="3"></textarea>
-        </div>
-        <button type="submit" id="submitBtn">提交報名</button>
-    </form>
+    <div id="formUI">
+        <h2>活動報名</h2>
+        <form id="regForm">
+            <div class="field">
+                <label>選擇活動：</label>
+                <select id="eventList" required onchange="showDetail()">
+                    <option value="">載入活動中...</option>
+                </select>
+                <div id="eventDetail"></div> </div>
+            <div class="field">
+                <label>您的姓名：</label>
+                <input type="text" id="userName" required placeholder="請輸入姓名">
+            </div>
+            <div class="field">
+                <label>備註事項：</label>
+                <textarea id="userNote" rows="3" placeholder="有什麼想對我們說的？"></textarea>
+            </div>
+            <button type="submit" id="submitBtn">立即報名</button>
+        </form>
+    </div>
+
+    <div id="successUI">
+        <div class="success-icon">✅</div>
+        <h2>恭喜！報名成功</h2>
+        <p style="text-align: left; background: #f9f9f9; padding: 15px; border-radius: 8px;">
+            <strong>報名活動：</strong><br><span id="resEvent"></span><br><br>
+            <strong>報名姓名：</strong><br><span id="resName"></span>
+        </p>
+        <button onclick="liff.closeWindow()">關閉視窗</button>
+    </div>
 </div>
 
 <script>
-    // 這裡填入你剛剛部署好的 Google Apps Script 網址
-    const API_URL = "https://script.google.com/macros/s/AKfycbza_e3Wc826Jl9TtYpOnwEmNYVhhlvtuD-5SxL0S5cjgT5pUCS3ZvIBSw0hPJFJBPsT/exec";
-    
-    // 這裡暫時留空，下一步去 LINE Developer 申請後填入
-    const MY_LIFF_ID = "2008808495-Sbl6oi6u"; 
+    const API_URL = "你的GAS部署網址"; 
+    const MY_LIFF_ID = "你的LIFF_ID";
+    let allEvents = []; // 儲存所有活動資料
 
     async function init() {
-        try {
-            // 初始化 LINE LIFF
-            await liff.init({ liffId: MY_LIFF_ID });
-            
-            if (!liff.isLoggedIn()) {
-                liff.login(); // 引導使用者登入 LINE
-            } else {
-                const profile = await liff.getProfile();
-                document.getElementById('userName').value = profile.displayName;
-                fetchEvents(); // 登入成功後開始抓取活動清單
-            }
-        } catch (err) {
-            console.error("LIFF 初始化失敗", err);
+        await liff.init({ liffId: MY_LIFF_ID });
+        if (!liff.isLoggedIn()) { liff.login(); return; }
+
+        // 5. 記憶姓名功能：檢查瀏覽器是否存過姓名
+        const savedName = localStorage.getItem('user_real_name');
+        if (savedName) {
+            document.getElementById('userName').value = savedName;
+        } else {
+            // 如果沒存過，先抓 LINE 的預設名稱
+            const profile = await liff.getProfile();
+            document.getElementById('userName').value = profile.displayName;
         }
+        
+        fetchEvents();
     }
 
-    // 向 Google 試算表要求「活動清單」
+    // 取得活動清單與詳情
     async function fetchEvents() {
         const response = await fetch(API_URL);
-        const data = await response.json();
+        allEvents = await response.json();
         const select = document.getElementById('eventList');
         select.innerHTML = '<option value="">-- 請選擇活動 --</option>';
         
-        // 從第二列開始巡迴（跳過標題）
-        for(let i=1; i<data.length; i++) {
-            if(data[i][1] === "進行中") { // 只顯示狀態為進行中的活動
+        for(let i=1; i<allEvents.length; i++) {
+            if(allEvents[i][1] === "進行中") {
                 let opt = document.createElement('option');
-                opt.value = data[i][0];
-                opt.innerText = data[i][0];
+                opt.value = i; // 存索引，方便抓取對應詳情
+                opt.innerText = allEvents[i][0];
                 select.appendChild(opt);
             }
         }
     }
 
-    // 處理表單提交
+    // 3. 顯示活動詳細資料
+    function showDetail() {
+        const index = document.getElementById('eventList').value;
+        const detailBox = document.getElementById('eventDetail');
+        if(index && allEvents[index][2]) {
+            detailBox.innerText = "📌 活動說明：\n" + allEvents[index][2];
+            detailBox.style.display = "block";
+        } else {
+            detailBox.style.display = "none";
+        }
+    }
+
     document.getElementById('regForm').onsubmit = async (e) => {
         e.preventDefault();
-        document.getElementById('submitBtn').disabled = true;
-        document.getElementById('submitBtn').innerText = "傳送中...";
+        const btn = document.getElementById('submitBtn');
+        btn.disabled = true;
+        btn.innerText = "傳送中...";
+
+        const eventIndex = document.getElementById('eventList').value;
+        const profile = await liff.getProfile();
+        const userName = document.getElementById('userName').value;
+
+        // 5. 記憶姓名到瀏覽器
+        localStorage.setItem('user_real_name', userName);
 
         const payload = {
-            event: document.getElementById('eventList').value,
-            name: document.getElementById('userName').value,
-            phone: document.getElementById('userPhone').value,
-            note: document.getElementById('userNote').value
+            event: allEvents[eventIndex][0],
+            name: userName,
+            note: document.getElementById('userNote').value,
+            lineId: profile.userId
         };
 
-        // 將資料 POST 到 Google 試算表
-        await fetch(API_URL, {
-            method: 'POST',
-            body: JSON.stringify(payload)
-        });
+        try {
+            // 1. 解決卡住問題：增加超時處理或確認回傳
+            await fetch(API_URL, { method: 'POST', body: JSON.stringify(payload) });
+            
+            // 傳送 LINE 訊息（可選）
+            await liff.sendMessages([{
+                type: 'text',
+                text: `✅ 報名成功！\n活動：${payload.event}\n報名者：${payload.name}`
+            }]).catch(err => console.log("訊息發送失敗，但不影響報名"));
 
-        // 在 LINE 視窗發送一條訊息讓大家看到
-        await liff.sendMessages([{
-            type: 'text',
-            text: `📢 報名成功！\n活動：${payload.event}\n報名者：${payload.name}`
-        }]);
+            // 6. 顯示成功 UI 並帶入活動資料
+            document.getElementById('formUI').style.display = "none";
+            document.getElementById('successUI').style.display = "block";
+            document.getElementById('resEvent').innerText = payload.event;
+            document.getElementById('resName').innerText = payload.name;
 
-        alert("報名成功！");
-        liff.closeWindow(); // 關閉小程式視窗
+        } catch (error) {
+            alert("系統繁忙，請稍後再試！");
+            btn.disabled = false;
+            btn.innerText = "立即報名";
+        }
     };
 
     init();
