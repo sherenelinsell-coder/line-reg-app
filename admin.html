@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>管理後台</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; background: #eee; }
+        .box { background: white; padding: 15px; border-radius: 10px; margin-bottom: 20px; }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 10px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background: #00b900; color: white; }
+        .btn-del { background: #ff4d4d; color: white; border: none; padding: 3px 8px; border-radius: 4px; cursor: pointer; }
+        input, textarea { width: 100%; padding: 8px; margin: 5px 0; box-sizing: border-box; }
+    </style>
+</head>
+<body>
+    <h2>🛠️ 活動管理後台</h2>
+
+    <div class="box">
+        <h3>1. 新增活動主題</h3>
+        <input type="text" id="addName" placeholder="活動名稱">
+        <textarea id="addDetail" placeholder="活動詳細資訊"></textarea>
+        <button onclick="addEvent()" style="background:#00b900; color:white; width:100%; padding:10px; border:none; border-radius:5px;">發布活動</button>
+    </div>
+
+    <div class="box">
+        <h3>2. 活動清單管理</h3>
+        <div id="evList">讀取中...</div>
+    </div>
+
+    <div class="box">
+        <h3>3. 報名紀錄統計</h3>
+        <select id="selEv" onchange="loadRecords()" style="width:100%; padding:10px;"></select>
+        <div id="recCount" style="margin-top:10px; font-weight:bold; color:#00b900;"></div>
+        <div id="recList"></div>
+    </div>
+
+<script>
+    const API_URL = "https://script.google.com/macros/s/AKfycbza_e3Wc826Jl9TtYpOnwEmNYVhhlvtuD-5SxL0S5cjgT5pUCS3ZvIBSw0hPJFJBPsT/exec"; 
+
+    async function init() {
+        const res = await fetch(API_URL + "?action=getEvents");
+        const evs = await res.json();
+        
+        // 渲染活動清單
+        let html = "<table><tr><th>名稱</th><th>操作</th></tr>";
+        let opts = '<option value="">-- 選擇活動查看名單 --</option>';
+        for(let i=1; i<evs.length; i++){
+            html += `<tr><td>${evs[i][0]}</td><td><button class="btn-del" onclick="delEvent('${evs[i][0]}')">刪除活動</button></td></tr>`;
+            opts += `<option value="${evs[i][0]}">${evs[i][0]}</option>`;
+        }
+        document.getElementById('evList').innerHTML = html + "</table>";
+        document.getElementById('selEv').innerHTML = opts;
+    }
+
+    async function addEvent() {
+        const name = document.getElementById('addName').value;
+        const detail = document.getElementById('addDetail').value;
+        if(!name) return alert("請填寫名稱");
+        await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: "addEvent", eventName: name, eventDetail: detail }) });
+        alert("已新增！"); location.reload();
+    }
+
+    async function delEvent(name) {
+        if(!confirm("刪除活動將連同所有報名名單一併刪除，確定嗎？")) return;
+        await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: "deleteEvent", eventName: name }) });
+        location.reload();
+    }
+
+    async function loadRecords() {
+        const target = document.getElementById('selEv').value;
+        const res = await fetch(API_URL + "?action=getRecords");
+        const recs = await res.json();
+        let html = "<table><tr><th>#</th><th>姓名</th><th>人數</th><th>備註</th><th>操作</th></tr>";
+        let count = 0; let total = 0;
+        for(let i=1; i<recs.length; i++) {
+            if(recs[i][1] === target) {
+                count++; total += parseInt(recs[i][3] || 0);
+                html += `<tr><td>${count}</td><td>${recs[i][2]}</td><td>${recs[i][3]}</td><td>${recs[i][4]}</td><td><button class="btn-del" onclick="delSingle(${i+1})">刪除</button></td></tr>`;
+            }
+        }
+        document.getElementById('recCount').innerText = `目前報名：${count} 筆，總計人數：${total} 人`;
+        document.getElementById('recList').innerHTML = html + "</table>";
+    }
+
+    async function delSingle(row) {
+        if(!confirm("確定要刪除這筆報名資料嗎？")) return;
+        await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: "deleteSingleRecord", rowIndex: row }) });
+        loadRecords();
+    }
+
+    init();
+</script>
+</body>
+</html>
