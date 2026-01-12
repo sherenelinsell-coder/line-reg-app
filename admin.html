@@ -3,97 +3,87 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>管理後台 終極修復版</title>
+    <title>活動後台管理</title>
     <style>
-        body { font-family: sans-serif; background: #eee; padding: 20px; }
-        .box { background: white; padding: 15px; border-radius: 10px; margin-bottom: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-        input, textarea, select { width: 100%; padding: 10px; margin: 5px 0; border: 1px solid #ccc; border-radius: 5px; box-sizing: border-box; }
-        button { padding: 10px; border: none; border-radius: 5px; cursor: pointer; color: white; font-weight: bold; }
-        .btn-green { background: #00b900; }
-        .btn-blue { background: #3498db; }
-        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        body { font-family: sans-serif; background: #eee; padding: 15px; }
+        .box { background: #fff; padding: 20px; border-radius: 10px; margin-bottom: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        input, textarea, select { width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ccc; border-radius: 5px; box-sizing: border-box; }
+        button { width: 100%; padding: 12px; background: #00b900; color: #fff; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 13px; }
         th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
     </style>
 </head>
 <body>
-    <h2>🛠️ 系統管理後台</h2>
 
-    <div class="box">
-        <button class="btn-blue" onclick="testConnection()">點我測試連線狀況</button>
-        <span id="testResult" style="margin-left:10px;"></span>
-    </div>
+<div class="box">
+    <h3>新增活動主題</h3>
+    <input type="text" id="addName" placeholder="活動名稱">
+    <textarea id="addDetail" placeholder="活動說明"></textarea>
+    <button onclick="addEvent()">發布活動到 Events 表</button>
+</div>
 
-    <div class="box">
-        <h3>1. 新增活動</h3>
-        <input type="text" id="addName" placeholder="活動主題名稱">
-        <textarea id="addDetail" placeholder="活動說明內容"></textarea>
-        <button class="btn-green" onclick="addEvent()" style="width:100%;">確認發布 (存入 Events)</button>
-    </div>
-
-    <div class="box">
-        <h3>2. 活動清單與報名統計</h3>
-        <select id="selEv" onchange="loadRecords()"><option value="">載入中...</option></select>
-        <div id="statInfo" style="margin:10px 0; font-weight:bold; color:#00b900;"></div>
-        <div id="recList"></div>
-    </div>
+<div class="box">
+    <h3>查詢與統計</h3>
+    <select id="selEv" onchange="loadRecords()"><option value="">-- 請選擇活動 --</option></select>
+    <div id="statInfo" style="margin-top:10px; font-weight:bold; color:#00b900;"></div>
+    <div id="recList"></div>
+</div>
 
 <script>
     const API_URL = "https://script.google.com/macros/s/AKfycbza_e3Wc826Jl9TtYpOnwEmNYVhhlvtuD-5SxL0S5cjgT5pUCS3ZvIBSw0hPJFJBPsT/exec"; 
 
-    // 測試連線
-    async function testConnection() {
-        const res = await fetch(API_URL);
-        const text = await res.text();
-        document.getElementById('testResult').innerText = text;
-        init(); // 測試成功後順便初始化
-    }
-
+    // 初始化：抓取活動選單
     async function init() {
         try {
             const res = await fetch(API_URL + "?action=getEvents&t=" + Date.now());
             const data = await res.json();
-            let opts = '<option value="">-- 請選擇活動 --</option>';
+            let opts = '<option value="">-- 請選擇活動查看名單 --</option>';
             for(let i=1; i<data.length; i++){
                 opts += `<option value="${data[i][0]}">${data[i][0]}</option>`;
             }
             document.getElementById('selEv').innerHTML = opts;
-        } catch(e) { console.error(e); }
+        } catch(e) { alert("讀取活動失敗，請確認 GAS 網址"); }
     }
 
+    // 新增活動
     async function addEvent() {
         const name = document.getElementById('addName').value;
         const detail = document.getElementById('addDetail').value;
-        if(!name) return alert("請填寫名稱");
+        if(!name) return alert("請輸入活動名稱");
         
-        await fetch(API_URL, {
+        const res = await fetch(API_URL, {
             method: 'POST',
             body: JSON.stringify({ action: "addEvent", eventName: name, eventDetail: detail })
         });
-        alert("指令已送出，請檢查試算表 Events 分頁。");
+        const msg = await res.text();
+        alert("伺服器回應：" + msg);
         location.reload();
     }
 
+    // 載入名單統計
     async function loadRecords() {
         const target = document.getElementById('selEv').value;
+        if(!target) return;
         const res = await fetch(API_URL + "?action=getRecords&t=" + Date.now());
         const data = await res.json();
         let html = "<table><tr><th>姓名</th><th>人數</th><th>備註</th><th>刪除</th></tr>";
         let count = 0; let total = 0;
-        for(let i=1; i<data.length; i++) {
-            if(data[i][1] === target) {
+        for(let i=1; i<data.length; i++){
+            if(data[i][1] === target){
                 count++; total += parseInt(data[i][3] || 0);
-                html += `<tr><td>${data[i][2]}</td><td>${data[i][3]}</td><td>${data[i][4]}</td><td><button onclick="delSingle(${i+1})" style="background:red; color:white; border:none; padding:3px;">X</button></td></tr>`;
+                html += `<tr><td>${data[i][2]}</td><td>${data[i][3]}</td><td>${data[i][4]}</td><td><button onclick="delSingle(${i+1})">X</button></td></tr>`;
             }
         }
-        document.getElementById('statInfo').innerText = `共 ${count} 筆報名，總計 ${total} 人`;
+        document.getElementById('statInfo').innerText = `目前報名：${count} 筆 | 總人數：${total} 人`;
         document.getElementById('recList').innerHTML = html + "</table>";
     }
 
     async function delSingle(row) {
-        if(!confirm("確定刪除？")) return;
+        if(!confirm("確定刪除這筆報名？")) return;
         await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: "deleteSingleRecord", rowIndex: row }) });
         loadRecords();
     }
+    init();
 </script>
 </body>
 </html>
