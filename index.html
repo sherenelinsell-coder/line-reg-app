@@ -3,105 +3,112 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>活動報名</title>
+    <title>活動報名入口</title>
     <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
     <style>
         body { font-family: sans-serif; background: #f4f7f6; padding: 20px; }
-        .card { background: white; padding: 20px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); max-width: 400px; margin: auto; }
-        .field { margin-bottom: 15px; }
-        label { display: block; margin-bottom: 5px; font-weight: bold; }
-        input, select, textarea { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; }
-        button { width: 100%; padding: 12px; background: #00b900; color: white; border: none; border-radius: 8px; font-size: 16px; cursor: pointer; }
-        #eventDetail { background: #eef9ee; padding: 10px; border-radius: 8px; font-size: 13px; margin-top: 5px; display: none; white-space: pre-wrap; }
-        #successUI { display: none; text-align: center; }
+        .card { background: white; padding: 20px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); max-width: 500px; margin: auto; }
+        .ev-item { border: 1px solid #ddd; padding: 15px; border-radius: 10px; margin-bottom: 10px; background: #fff; }
+        .ev-title { font-size: 18px; font-weight: bold; color: #00b900; }
+        .ev-detail { font-size: 14px; color: #666; margin: 10px 0; white-space: pre-wrap; }
+        .btn-group { display: flex; gap: 10px; }
+        .btn { flex: 1; padding: 10px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; text-align: center; }
+        .btn-reg { background: #00b900; color: white; }
+        .btn-info { background: #3498db; color: white; }
+        .form-box { display: none; }
+        input, textarea { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; }
     </style>
 </head>
 <body>
-<div class="card" id="formUI">
-    <h2>活動報名</h2>
+
+<div class="card" id="listUI">
+    <h2 style="text-align:center;">📅 近期活動列表</h2>
+    <div id="activityList">讀取中...</div>
+</div>
+
+<div class="card form-box" id="regUI">
+    <button onclick="location.reload()" style="background:none; border:none; color:#999; cursor:pointer;">← 返回列表</button>
+    <h2 id="regTitle">報名活動</h2>
     <form id="regForm">
-        <div class="field">
-            <label>活動：</label>
-            <select id="eventList" required onchange="showDetail()"><option value="">載入中...</option></select>
-            <div id="eventDetail"></div>
-        </div>
-        <div class="field">
-            <label>姓名：</label>
-            <input type="text" id="userName" required>
-        </div>
-        <div class="field">
-            <label>人數：</label>
-            <input type="number" id="userCount" value="1" min="1" required>
-        </div>
-        <div class="field">
-            <label>備註 (如：曲目)：</label>
-            <textarea id="userNote" rows="2"></textarea>
-        </div>
-        <button type="submit" id="btn">送出報名</button>
+        <input type="text" id="userName" placeholder="姓名" required>
+        <input type="number" id="userCount" value="1" min="1" required>
+        <textarea id="userNote" placeholder="備註/曲目"></textarea>
+        <button type="submit" class="btn btn-reg" style="width:100%;">確認提交報名</button>
     </form>
 </div>
 
-<div class="card" id="successUI">
-    <h2 style="color:#00b900;">✅ 報名成功</h2>
-    <div id="resInfo" style="text-align:left; font-size:14px; background:#f9f9f9; padding:10px;"></div>
-    <button onclick="liff.closeWindow()" style="margin-top:10px;">關閉視窗</button>
+<div class="card form-box" id="infoUI">
+    <button onclick="location.reload()" style="background:none; border:none; color:#999; cursor:pointer;">← 返回列表</button>
+    <h2 id="infoTitle">活動詳情與進度</h2>
+    <div id="infoContent" style="background:#f9f9f9; padding:15px; border-radius:8px;"></div>
+    <div id="infoStatus" style="margin-top:20px;"></div>
 </div>
 
 <script>
     const API_URL = "https://script.google.com/macros/s/AKfycbza_e3Wc826Jl9TtYpOnwEmNYVhhlvtuD-5SxL0S5cjgT5pUCS3ZvIBSw0hPJFJBPsT/exec"; 
     const MY_LIFF_ID = "2008808495-Sbl6oi6u";
-    let allEv = [];
+    let selectedEvent = "";
 
     async function init() {
         await liff.init({ liffId: MY_LIFF_ID });
         if(!liff.isLoggedIn()){ liff.login(); return; }
-        
-        const savedName = localStorage.getItem('user_real_name');
-        if(savedName) document.getElementById('userName').value = savedName;
-
-        const res = await fetch(API_URL + "?action=getEvents");
-        allEv = await res.json();
-        const sel = document.getElementById('eventList');
-        sel.innerHTML = '<option value="">-- 請選擇 --</option>';
-        for(let i=1; i<allEv.length; i++) {
-            if(allEv[i][1]==="進行中") sel.innerHTML += `<option value="${i}">${allEv[i][0]}</option>`;
+        const res = await fetch(API_URL + "?action=getEvents&t=" + Date.now());
+        const evs = await res.json();
+        let html = "";
+        for(let i=1; i<evs.length; i++){
+            if(evs[i][1] === "進行中"){
+                html += `<div class="ev-item">
+                    <div class="ev-title">${evs[i][0]}</div>
+                    <div class="ev-detail">${evs[i][2] || '暫無詳情'}</div>
+                    <div class="btn-group">
+                        <button class="btn btn-reg" onclick="goReg('${evs[i][0]}')">我要報名</button>
+                        <button class="btn btn-info" onclick="goInfo('${evs[i][0]}','${evs[i][2] || '無'}')">報名狀況</button>
+                    </div>
+                </div>`;
+            }
         }
+        document.getElementById('activityList').innerHTML = html || "目前沒有活動喔！";
     }
 
-    function showDetail() {
-        const idx = document.getElementById('eventList').value;
-        const box = document.getElementById('eventDetail');
-        if(idx && allEv[idx][2]) { box.innerText = allEv[idx][2]; box.style.display="block"; }
-        else box.style.display="none";
+    function goReg(name) {
+        selectedEvent = name;
+        document.getElementById('listUI').style.display = "none";
+        document.getElementById('regUI').style.display = "block";
+        document.getElementById('regTitle').innerText = "報名：" + name;
+        const saved = localStorage.getItem('user_real_name');
+        if(saved) document.getElementById('userName').value = saved;
+    }
+
+    async function goInfo(name, detail) {
+        document.getElementById('listUI').style.display = "none";
+        document.getElementById('infoUI').style.display = "block";
+        document.getElementById('infoTitle').innerText = name;
+        document.getElementById('infoContent').innerText = "📌 活動說明：\n" + detail;
+        
+        const res = await fetch(API_URL + "?action=getRecords&t=" + Date.now());
+        const recs = await res.json();
+        let html = "<h4>目前報名名單：</h4>";
+        let count = 0;
+        for(let i=1; i<recs.length; i++){
+            if(recs[i][1] === name){
+                count++;
+                html += `<div style="font-size:14px; border-bottom:1px solid #eee; padding:5px 0;">${count}. ${recs[i][2]} (${recs[i][3]}人) - ${recs[i][4] || '無備註'}</div>`;
+            }
+        }
+        document.getElementById('infoStatus').innerHTML = html + `<p><b>總計：${count} 筆報名</b></p>`;
     }
 
     document.getElementById('regForm').onsubmit = async (e) => {
         e.preventDefault();
-        const btn = document.getElementById('btn');
-        btn.disabled = true; btn.innerText = "傳送中...";
-        
-        const idx = document.getElementById('eventList').value;
         const name = document.getElementById('userName').value;
         localStorage.setItem('user_real_name', name);
         const profile = await liff.getProfile();
-
-        const data = {
-            action: "register",
-            event: allEv[idx][0],
-            name: name,
-            count: document.getElementById('userCount').value,
-            note: document.getElementById('userNote').value,
-            lineId: profile.userId
-        };
-
+        const data = { action: "register", event: selectedEvent, name: name, count: document.getElementById('userCount').value, note: document.getElementById('userNote').value, lineId: profile.userId };
         await fetch(API_URL, { method: 'POST', body: JSON.stringify(data) });
-        
-        document.getElementById('resInfo').innerHTML = `<b>活動：</b>${data.event}<br><b>詳情：</b>${allEv[idx][2] || '無'}<br><b>姓名：</b>${name}<br><b>備註：</b>${data.note}`;
-        document.getElementById('formUI').style.display="none";
-        document.getElementById('successUI').style.display="block";
-        
-        liff.sendMessages([{type:'text', text:`✅ 報名成功：${data.event}\n姓名：${name}`}]);
+        alert("報名成功！");
+        location.reload();
     };
+
     init();
 </script>
 </body>
