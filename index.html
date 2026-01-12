@@ -12,57 +12,60 @@
         .btn-reg { background: #00b900; }
         .btn-info { background: #3498db; }
         .overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: white; padding: 20px; box-sizing: border-box; overflow-y: auto; }
+        input, textarea { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; }
     </style>
 </head>
 <body>
 
 <div id="listUI">
     <h2 style="text-align:center;">📅 活動列表</h2>
-    <div id="activityItems">讀取中...</div>
+    <div id="items">正在讀取最新活動...</div>
 </div>
 
 <div id="regUI" class="overlay">
     <button onclick="location.reload()">← 返回</button>
     <h2 id="regTitle">報名活動</h2>
-    <input type="text" id="uName" placeholder="姓名" style="width:100%; padding:10px; margin:10px 0;">
-    <input type="number" id="uCount" value="1" min="1" style="width:100%; padding:10px; margin:10px 0;">
-    <textarea id="uNote" placeholder="備註/曲目" style="width:100%; padding:10px; margin:10px 0;"></textarea>
-    <button onclick="submitReg()" class="btn-reg" style="width:100%; height:50px;">確認提交</button>
+    <input type="text" id="uName" placeholder="您的姓名" required>
+    <input type="number" id="uCount" value="1" min="1" required>
+    <textarea id="uNote" placeholder="備註 (如：曲目)"></textarea>
+    <button onclick="submitReg()" class="btn-reg" style="width:100%; padding:15px;">確認提交</button>
 </div>
 
 <div id="infoUI" class="overlay">
     <button onclick="location.reload()">← 返回</button>
-    <h2 id="infoTitle">目前狀況</h2>
-    <div id="infoBox" style="background:#eee; padding:15px; border-radius:10px;"></div>
+    <h2 id="infoTitle">報名狀況</h2>
+    <div id="infoBox" style="background:#f9f9f9; padding:15px; border-radius:8px;"></div>
 </div>
 
 <script>
     const API_URL = "https://script.google.com/macros/s/AKfycbza_e3Wc826Jl9TtYpOnwEmNYVhhlvtuD-5SxL0S5cjgT5pUCS3ZvIBSw0hPJFJBPsT/exec";
     const LIFF_ID = "2008808495-Sbl6oi6u";
-    let selectedName = "";
+    let curName = "";
 
     async function init() {
         await liff.init({ liffId: LIFF_ID });
         if(!liff.isLoggedIn()) { liff.login(); return; }
         
-        const res = await fetch(API_URL + "?action=getEvents&t=" + Date.now());
-        const data = await res.json();
-        let html = "";
-        for(let i=1; i<data.length; i++) {
-            if(data[i][1] === "進行中") {
-                html += `<div class="card">
-                    <div style="font-size:18px; font-weight:bold; color:#00b900;">${data[i][0]}</div>
-                    <p style="font-size:14px; color:#666;">${data[i][2] || '無說明'}</p>
-                    <button class="btn btn-reg" onclick="openReg('${data[i][0]}')">我要報名</button>
-                    <button class="btn btn-info" onclick="openInfo('${data[i][0]}','${data[i][2]}')">報名狀況</button>
-                </div>`;
+        try {
+            const res = await fetch(API_URL + "?action=getEvents&t=" + Date.now());
+            const data = await res.json();
+            let html = "";
+            for(let i=1; i<data.length; i++) {
+                if(data[i][1] === "進行中") {
+                    html += `<div class="card">
+                        <div style="font-size:18px; font-weight:bold; color:#00b900;">${data[i][0]}</div>
+                        <p style="font-size:14px; color:#666;">${data[i][2] || '無說明'}</p>
+                        <button class="btn btn-reg" onclick="openReg('${data[i][0]}')">我要報名</button>
+                        <button class="btn btn-info" onclick="openInfo('${data[i][0]}','${data[i][2]}')">報名狀況</button>
+                    </div>`;
+                }
             }
-        }
-        document.getElementById('activityItems').innerHTML = html || "暫無活動";
+            document.getElementById('items').innerHTML = html || "暫無活動";
+        } catch(e) { document.getElementById('items').innerHTML = "連線失敗"; }
     }
 
     function openReg(name) {
-        selectedName = name;
+        curName = name;
         document.getElementById('listUI').style.display = "none";
         document.getElementById('regUI').style.display = "block";
         document.getElementById('regTitle').innerText = name;
@@ -75,13 +78,13 @@
         document.getElementById('infoTitle').innerText = name;
         
         const res = await fetch(API_URL + "?action=getRecords&t=" + Date.now());
-        const recs = await res.json();
-        let html = `📌 詳情：${detail}<br><br><b>已報名：</b><br>`;
+        const data = await res.json();
+        let html = `📌 詳情：${detail}<br><br><b>報名名單：</b><br>`;
         let count = 0;
-        for(let i=1; i<recs.length; i++) {
-            if(recs[i][1] === name) {
+        for(let i=1; i<data.length; i++) {
+            if(data[i][1] === name) {
                 count++;
-                html += `${count}. ${recs[i][2]} (${recs[i][3]}人)<br>`;
+                html += `${count}. ${data[i][2]} (${data[i][3]}人)<br>`;
             }
         }
         document.getElementById('infoBox').innerHTML = html + `<br><b>總計：${count} 筆</b>`;
@@ -96,7 +99,7 @@
         await fetch(API_URL, {
             method: 'POST',
             body: JSON.stringify({
-                action: "register", event: selectedName, name: name, 
+                action: "register", event: curName, name: name, 
                 count: document.getElementById('uCount').value,
                 note: document.getElementById('uNote').value,
                 lineId: profile.userId
