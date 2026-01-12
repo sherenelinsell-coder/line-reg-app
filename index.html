@@ -8,7 +8,7 @@
     <style>
         body { font-family: sans-serif; background: #f4f7f6; padding: 15px; }
         .card { background: white; padding: 15px; border-radius: 12px; margin-bottom: 15px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-        .btn { padding: 10px; border: none; border-radius: 5px; cursor: pointer; color: white; font-weight: bold; width: 48%; }
+        .btn { padding: 10px; border: none; border-radius: 5px; color: white; font-weight: bold; width: 48%; cursor: pointer; }
         .btn-reg { background: #00b900; }
         .btn-info { background: #3498db; }
         .overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: white; padding: 20px; box-sizing: border-box; overflow-y: auto; }
@@ -16,75 +16,75 @@
 </head>
 <body>
 
-<div id="mainUI">
+<div id="listUI">
     <h2 style="text-align:center;">📅 活動列表</h2>
-    <div id="list">讀取中...</div>
+    <div id="activityItems">讀取中...</div>
 </div>
 
 <div id="regUI" class="overlay">
     <button onclick="location.reload()">← 返回</button>
     <h2 id="regTitle">報名活動</h2>
-    <input type="text" id="uName" placeholder="您的真實姓名" style="width:100%; padding:10px; margin:10px 0;">
+    <input type="text" id="uName" placeholder="姓名" style="width:100%; padding:10px; margin:10px 0;">
     <input type="number" id="uCount" value="1" min="1" style="width:100%; padding:10px; margin:10px 0;">
     <textarea id="uNote" placeholder="備註/曲目" style="width:100%; padding:10px; margin:10px 0;"></textarea>
-    <button onclick="submitReg()" style="width:100%; padding:15px; background:#00b900; color:white; border:none; border-radius:8px;">確認送出</button>
+    <button onclick="submitReg()" class="btn-reg" style="width:100%; height:50px;">確認提交</button>
 </div>
 
 <div id="infoUI" class="overlay">
     <button onclick="location.reload()">← 返回</button>
-    <h2 id="infoTitle">報名進度</h2>
-    <p id="viewDetail" style="background:#eee; padding:10px; white-space:pre-wrap;"></p>
-    <div id="viewStatus"></div>
+    <h2 id="infoTitle">目前狀況</h2>
+    <div id="infoBox" style="background:#eee; padding:15px; border-radius:10px;"></div>
 </div>
 
 <script>
     const API_URL = "https://script.google.com/macros/s/AKfycbza_e3Wc826Jl9TtYpOnwEmNYVhhlvtuD-5SxL0S5cjgT5pUCS3ZvIBSw0hPJFJBPsT/exec";
     const LIFF_ID = "2008808495-Sbl6oi6u";
-    let curEv = "";
+    let selectedName = "";
 
     async function init() {
         await liff.init({ liffId: LIFF_ID });
-        if(!liff.isLoggedIn()){ liff.login(); return; }
+        if(!liff.isLoggedIn()) { liff.login(); return; }
         
         const res = await fetch(API_URL + "?action=getEvents&t=" + Date.now());
-        const evs = await res.json();
+        const data = await res.json();
         let html = "";
-        for(let i=1; i<evs.length; i++){
-            if(evs[i][1] === "進行中") {
+        for(let i=1; i<data.length; i++) {
+            if(data[i][1] === "進行中") {
                 html += `<div class="card">
-                    <div style="font-weight:bold; color:#00b900;">${evs[i][0]}</div>
-                    <p style="font-size:14px; color:#666;">${evs[i][2] || '無說明'}</p>
-                    <button class="btn btn-reg" onclick="openReg('${evs[i][0]}')">我要報名</button>
-                    <button class="btn btn-info" onclick="openInfo('${evs[i][0]}','${evs[i][2]}')">報名狀況</button>
+                    <div style="font-size:18px; font-weight:bold; color:#00b900;">${data[i][0]}</div>
+                    <p style="font-size:14px; color:#666;">${data[i][2] || '無說明'}</p>
+                    <button class="btn btn-reg" onclick="openReg('${data[i][0]}')">我要報名</button>
+                    <button class="btn btn-info" onclick="openInfo('${data[i][0]}','${data[i][2]}')">報名狀況</button>
                 </div>`;
             }
         }
-        document.getElementById('list').innerHTML = html || "目前沒有活動";
+        document.getElementById('activityItems').innerHTML = html || "暫無活動";
     }
 
     function openReg(name) {
-        curEv = name;
+        selectedName = name;
+        document.getElementById('listUI').style.display = "none";
         document.getElementById('regUI').style.display = "block";
         document.getElementById('regTitle').innerText = name;
         document.getElementById('uName').value = localStorage.getItem('uName') || "";
     }
 
     async function openInfo(name, detail) {
+        document.getElementById('listUI').style.display = "none";
         document.getElementById('infoUI').style.display = "block";
         document.getElementById('infoTitle').innerText = name;
-        document.getElementById('viewDetail').innerText = detail || "無活動說明";
         
         const res = await fetch(API_URL + "?action=getRecords&t=" + Date.now());
         const recs = await res.json();
-        let html = "<h4>已報名名單：</h4><ul>";
+        let html = `📌 詳情：${detail}<br><br><b>已報名：</b><br>`;
         let count = 0;
-        for(let i=1; i<recs.length; i++){
-            if(String(recs[i][1]).trim() === name.trim()){
+        for(let i=1; i<recs.length; i++) {
+            if(recs[i][1] === name) {
                 count++;
-                html += `<li>${recs[i][2]} (${recs[i][3]}人)</li>`;
+                html += `${count}. ${recs[i][2]} (${recs[i][3]}人)<br>`;
             }
         }
-        document.getElementById('viewStatus').innerHTML = html + `</ul><p><b>總計：${count} 筆</b></p>`;
+        document.getElementById('infoBox').innerHTML = html + `<br><b>總計：${count} 筆</b>`;
     }
 
     async function submitReg() {
@@ -96,7 +96,7 @@
         await fetch(API_URL, {
             method: 'POST',
             body: JSON.stringify({
-                action: "register", event: curEv, name: name, 
+                action: "register", event: selectedName, name: name, 
                 count: document.getElementById('uCount').value,
                 note: document.getElementById('uNote').value,
                 lineId: profile.userId
